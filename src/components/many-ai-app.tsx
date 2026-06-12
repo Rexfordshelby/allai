@@ -4,6 +4,9 @@ import {
   AlertTriangle,
   Bot,
   Check,
+  Clock3,
+  Cpu,
+  FileText,
   Image as ImageIcon,
   Layers3,
   Loader2,
@@ -12,6 +15,7 @@ import {
   Search,
   Send,
   Sparkles,
+  UserRound,
   X
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -702,53 +706,125 @@ function ChatPanel({
   isSending: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const selectedModelInfo =
+    models.find((model) => model.id === selectedModel) ?? models[0];
+  const userTurns = messages.filter((message) => message.role === "user").length;
+  const assistantTurns = messages.filter(
+    (message) => message.role === "assistant"
+  ).length;
+  const promptCharacters = prompt.trim().length;
+
   return (
-    <div className="panel-layout">
-      <section className="conversation-panel" aria-label="Chat messages">
-        {messages.length === 0 ? (
-          <div className="empty-state">
+    <div className="panel-layout chat-layout">
+      <section className="chat-command-bar" aria-label="Chat configuration">
+        <div className="chat-model-summary">
+          <div className="chat-avatar model">
             <Bot aria-hidden="true" />
-            <h2>Start a model conversation</h2>
-            <p>Pick a model, ask once, and keep the thread in this workspace.</p>
+          </div>
+          <div>
+            <span>Active model</span>
+            <strong>{selectedModelInfo?.name ?? selectedModel}</strong>
+            <small>{selectedModelInfo?.id ?? selectedModel}</small>
+          </div>
+        </div>
+        <div className="chat-metrics" aria-label="Conversation details">
+          <span>
+            <Cpu aria-hidden="true" />
+            {formatContextLength(selectedModelInfo?.contextLength)}
+          </span>
+          <span>
+            <FileText aria-hidden="true" />
+            {userTurns} user / {assistantTurns} AI
+          </span>
+          <span>
+            <Clock3 aria-hidden="true" />
+            {isSending ? "Streaming" : "Ready"}
+          </span>
+        </div>
+      </section>
+
+      <section className="conversation-panel chat-thread" aria-label="Chat messages">
+        {messages.length === 0 ? (
+          <div className="empty-state chat-empty">
+            <Sparkles aria-hidden="true" />
+            <h2>Ready for a sharper answer</h2>
+            <p>{selectedModelInfo?.name ?? "The selected model"} is standing by.</p>
           </div>
         ) : (
           messages.map((message) => (
-            <article key={message.id ?? `${message.role}-${message.created_at}`} className={`message ${message.role}`}>
-              <div className="message-meta">
-                <span>{message.role === "user" ? "You" : modelLabel(message.model_id)}</span>
-                {message.model_id ? <small>{message.model_id}</small> : null}
+            <article
+              key={message.id ?? `${message.role}-${message.created_at}`}
+              className={`message ${message.role}`}
+            >
+              <div className="message-avatar">
+                {message.role === "user" ? (
+                  <UserRound aria-hidden="true" />
+                ) : (
+                  <Bot aria-hidden="true" />
+                )}
               </div>
-              <p>{message.content || "..."}</p>
+              <div className="message-body">
+                <div className="message-meta">
+                  <div>
+                    <span>
+                      {message.role === "user"
+                        ? "You"
+                        : modelLabel(message.model_id)}
+                    </span>
+                    {message.model_id ? <small>{message.model_id}</small> : null}
+                  </div>
+                  <time>{formatMessageTime(message.created_at)}</time>
+                </div>
+                <p>{message.content || "..."}</p>
+              </div>
             </article>
           ))
         )}
       </section>
 
-      <form className="composer" onSubmit={onSubmit}>
-        <label htmlFor="chat-model">Model</label>
-        <select
-          id="chat-model"
-          value={selectedModel}
-          onChange={(event) => onModelChange(event.target.value)}
-        >
-          {models.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.name}
-            </option>
-          ))}
-        </select>
+      <form className="composer chat-composer" onSubmit={onSubmit}>
+        <div className="composer-toolbar">
+          <div>
+            <label htmlFor="chat-model">Model</label>
+            <select
+              id="chat-model"
+              value={selectedModel}
+              onChange={(event) => onModelChange(event.target.value)}
+            >
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="composer-stat">
+            <span>{promptCharacters}</span>
+            <small>characters</small>
+          </div>
+        </div>
         <label htmlFor="chat-prompt">Message</label>
-        <textarea
-          id="chat-prompt"
-          value={prompt}
-          onChange={(event) => onPromptChange(event.target.value)}
-          placeholder="Ask anything..."
-          rows={4}
-        />
-        <button className="primary-button" disabled={isSending || !prompt.trim()} type="submit">
-          {isSending ? <Loader2 className="spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
-          <span>{isSending ? "Streaming" : "Send"}</span>
-        </button>
+        <div className="prompt-box">
+          <textarea
+            id="chat-prompt"
+            value={prompt}
+            onChange={(event) => onPromptChange(event.target.value)}
+            placeholder="Ask for research, writing, code, planning, or analysis..."
+            rows={4}
+          />
+          <button
+            className="primary-button composer-send"
+            disabled={isSending || !prompt.trim()}
+            type="submit"
+          >
+            {isSending ? (
+              <Loader2 className="spin" aria-hidden="true" />
+            ) : (
+              <Send aria-hidden="true" />
+            )}
+            <span>{isSending ? "Streaming" : "Send"}</span>
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -969,6 +1045,29 @@ function modelLabel(modelId?: string | null) {
   }
 
   return modelId.split("/").at(-1) ?? modelId;
+}
+
+function formatContextLength(contextLength?: number) {
+  if (!contextLength) {
+    return "Context varies";
+  }
+
+  if (contextLength >= 1000) {
+    return `${Math.round(contextLength / 1000)}k context`;
+  }
+
+  return `${contextLength} context`;
+}
+
+function formatMessageTime(createdAt?: string) {
+  if (!createdAt) {
+    return "Now";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(createdAt));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
