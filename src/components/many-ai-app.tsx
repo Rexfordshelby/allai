@@ -2,25 +2,28 @@
 
 import {
   AlertTriangle,
-  Bot,
+  ArrowUp,
+  ChevronDown,
   Check,
-  Clock3,
-  Cpu,
-  FileText,
+  Copy,
+  ExternalLink,
+  Folder,
   Image as ImageIcon,
   Layers3,
   Loader2,
-  LogOut,
+  Mic,
+  PanelLeft,
+  Paperclip,
   Plus,
   Search,
-  Send,
+  Settings,
   Sparkles,
+  ThumbsUp,
   UserRound,
   X
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  APP_NAME,
   DEFAULT_COMPARE_MODELS,
   DEFAULT_IMAGE_MODELS,
   DEFAULT_TEXT_MODELS,
@@ -56,7 +59,6 @@ type SseEvent = {
 };
 
 export function ManyAiApp({
-  user,
   cloudEnabled = false
 }: {
   user: UserSummary;
@@ -78,7 +80,6 @@ export function ManyAiApp({
   >(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [search, setSearch] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [compareResults, setCompareResults] = useState<
@@ -141,69 +142,9 @@ export function ManyAiApp({
     void refreshImages();
   }, [refreshConversations, refreshImages, refreshModels]);
 
-  const filteredConversations = conversations.filter((conversation) =>
-    conversation.title.toLowerCase().includes(search.toLowerCase())
-  );
-
   const modelLookup = useMemo(() => {
     return new Map(models.map((model) => [model.id, model]));
   }, [models]);
-
-  async function loadConversation(conversationId: string) {
-    if (!supabase) {
-      return;
-    }
-
-    setStatusMessage(null);
-
-    const { data: conversation, error: conversationError } = await supabase
-      .from("conversations")
-      .select("*")
-      .eq("id", conversationId)
-      .single();
-
-    if (conversationError || !conversation) {
-      setStatusMessage(conversationError?.message ?? "Conversation not found.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("messages")
-      .select("id, role, content, model_id, created_at")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      setStatusMessage(error.message);
-      return;
-    }
-
-    const loadedMessages = (data as ChatMessage[]) ?? [];
-    const loadedConversation = conversation as Conversation;
-    setSelectedConversationId(conversationId);
-    setMode(loadedConversation.mode);
-    setMessages(loadedMessages);
-
-    if (loadedConversation.mode === "compare") {
-      const nextResults: Record<string, CompareColumn> = {};
-
-      for (const message of loadedMessages) {
-        if (message.role === "assistant" && message.model_id) {
-          nextResults[message.model_id] = {
-            model: message.model_id,
-            content: message.content,
-            status: "completed"
-          };
-        }
-      }
-
-      const loadedModels = Object.keys(nextResults);
-      if (loadedModels.length) {
-        setCompareModels(loadedModels.slice(0, MAX_COMPARE_MODELS));
-      }
-      setCompareResults(nextResults);
-    }
-  }
 
   function startNewConversation(nextMode = mode) {
     setSelectedConversationId(null);
@@ -212,15 +153,6 @@ export function ManyAiApp({
     setPrompt("");
     setCompareResults({});
     setStatusMessage(null);
-  }
-
-  async function signOut() {
-    if (!supabase) {
-      return;
-    }
-
-    await supabase.auth.signOut();
-    window.location.reload();
   }
 
   function buildHistory() {
@@ -507,122 +439,103 @@ export function ManyAiApp({
           content: "",
           status: "idle" as CompareStatus
         }));
+  const recentTitles =
+    conversations.length > 0
+      ? conversations.slice(0, 5).map((conversation) => conversation.title)
+      : [
+          "Q2 Marketing Strategy",
+          "Product Roadmap Review",
+          "User Research Insights",
+          "Competitive Analysis",
+          "Brand Positioning"
+        ];
 
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="Conversation history">
         <div className="sidebar-head">
-          <div className="brand-row compact">
-            <div className="brand-mark">M</div>
-            <div>
-              <p className="eyebrow">Workspace</p>
-              <strong>{APP_NAME}</strong>
-            </div>
-          </div>
+          <strong className="luma-brand">Luma</strong>
           <button
-            className="icon-button"
+            className="sidebar-collapse"
             onClick={() => startNewConversation(mode)}
             title="New conversation"
             aria-label="New conversation"
           >
-            <Plus aria-hidden="true" />
+            <PanelLeft aria-hidden="true" />
           </button>
         </div>
 
-        <div className="mode-tabs" role="tablist" aria-label="Workspace mode">
+        <nav className="luma-nav" aria-label="Workspace navigation">
           <button
-            className={mode === "chat" ? "active" : ""}
+            className={mode === "chat" ? "active primary" : "primary"}
             onClick={() => startNewConversation("chat")}
-            title="Single chat"
             type="button"
           >
-            <Bot aria-hidden="true" />
-            <span>Chat</span>
+            <span className="nav-icon">
+              <Plus aria-hidden="true" />
+            </span>
+            <span>New Chat</span>
           </button>
           <button
             className={mode === "compare" ? "active" : ""}
             onClick={() => startNewConversation("compare")}
-            title="Compare models"
             type="button"
           >
-            <Layers3 aria-hidden="true" />
-            <span>Compare</span>
+            <Folder aria-hidden="true" />
+            <span>Library</span>
           </button>
           <button
             className={mode === "image" ? "active" : ""}
             onClick={() => startNewConversation("image")}
-            title="Generate images"
             type="button"
           >
             <ImageIcon aria-hidden="true" />
-            <span>Image</span>
+            <span>Projects</span>
           </button>
-        </div>
-
-        <div className="search-box">
-          <Search aria-hidden="true" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search chats"
-          />
-        </div>
-
-        <nav className="conversation-list" aria-label="Saved conversations">
-          {filteredConversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              className={
-                conversation.id === selectedConversationId ? "selected" : ""
-              }
-              onClick={() => void loadConversation(conversation.id)}
-              type="button"
-            >
-              <span>{conversation.title}</span>
-              <small>{conversation.mode}</small>
-            </button>
-          ))}
-          {filteredConversations.length === 0 ? (
-            <p className="empty-text">No saved conversations yet.</p>
-          ) : null}
+          <button type="button">
+            <Mic aria-hidden="true" />
+            <span>Voice</span>
+          </button>
+          <button type="button">
+            <Settings aria-hidden="true" />
+            <span>Settings</span>
+          </button>
         </nav>
 
-        <div className="account-row">
-          <div>
-            <small>{cloudEnabled ? "Signed in" : "No login required"}</small>
-            <span>{user.email}</span>
-          </div>
-          {cloudEnabled ? (
-            <button
-              className="icon-button"
-              onClick={() => void signOut()}
-              title="Sign out"
-              aria-label="Sign out"
-              type="button"
-            >
-              <LogOut aria-hidden="true" />
+        <section className="recent-section" aria-label="Recent chats">
+          <p>Recent</p>
+          {recentTitles.map((title, index) => (
+            <button key={title} className={index === 0 ? "active" : ""} type="button">
+              {title}
             </button>
-          ) : null}
+          ))}
+          <button type="button">View all</button>
+        </section>
+
+        <div className="account-row">
+          <div className="orb-avatar" aria-hidden="true" />
+          <div className="account-copy">
+            <strong>Alex Morgan</strong>
+            <small>Pro Plan</small>
+          </div>
+          <span className="account-dot" aria-hidden="true" />
         </div>
       </aside>
 
       <section className="workspace">
         <header className="workspace-header">
-          <div>
-            <p className="eyebrow">
-              {mode === "chat"
-                ? "Single model"
-                : mode === "compare"
-                  ? "Side-by-side"
-                  : "Image generation"}
-            </p>
-            <h1>
-              {mode === "chat"
-                ? "Chat with one model"
-                : mode === "compare"
-                  ? "Compare AI replies"
-                  : "Generate images"}
-            </h1>
+          <div className="model-title">
+            <span>Luma 2.0</span>
+            <ChevronDown aria-hidden="true" />
+          </div>
+          <div className="top-actions">
+            <button title="Search" aria-label="Search" type="button">
+              <Search aria-hidden="true" />
+            </button>
+            <button title="AI tools" aria-label="AI tools" type="button">
+              <Sparkles aria-hidden="true" />
+            </button>
+            <div className="top-orb" aria-hidden="true" />
           </div>
           {statusMessage ? (
             <div className="status-pill" role="status">
@@ -640,48 +553,47 @@ export function ManyAiApp({
           ) : null}
         </header>
 
-        {mode === "chat" ? (
-          <ChatPanel
-            messages={messages}
-            models={models}
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-            prompt={prompt}
-            onPromptChange={setPrompt}
-            isSending={isSending}
-            onSubmit={submitChat}
-          />
-        ) : null}
+        <div className="workspace-body">
+          {mode === "chat" ? (
+            <ChatPanel
+              messages={messages}
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              isSending={isSending}
+              onSubmit={submitChat}
+            />
+          ) : null}
 
-        {mode === "compare" ? (
-          <ComparePanel
-            models={models}
-            modelLookup={modelLookup}
-            selectedModels={compareModels}
-            onToggleModel={toggleCompareModel}
-            prompt={prompt}
-            onPromptChange={setPrompt}
-            isSending={isSending}
-            onSubmit={submitCompare}
-            columns={activeCompareColumns}
-          />
-        ) : null}
+          {mode === "compare" ? (
+            <ComparePanel
+              models={models}
+              modelLookup={modelLookup}
+              selectedModels={compareModels}
+              onToggleModel={toggleCompareModel}
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              isSending={isSending}
+              onSubmit={submitCompare}
+              columns={activeCompareColumns}
+            />
+          ) : null}
 
-        {mode === "image" ? (
-          <ImagePanel
-            images={images}
-            imagePrompt={imagePrompt}
-            negativePrompt={negativePrompt}
-            imageModel={imageModel}
-            imageSize={imageSize}
-            isGenerating={isGenerating}
-            onPromptChange={setImagePrompt}
-            onNegativePromptChange={setNegativePrompt}
-            onModelChange={setImageModel}
-            onSizeChange={setImageSize}
-            onSubmit={submitImage}
-          />
-        ) : null}
+          {mode === "image" ? (
+            <ImagePanel
+              images={images}
+              imagePrompt={imagePrompt}
+              negativePrompt={negativePrompt}
+              imageModel={imageModel}
+              imageSize={imageSize}
+              isGenerating={isGenerating}
+              onPromptChange={setImagePrompt}
+              onNegativePromptChange={setNegativePrompt}
+              onModelChange={setImageModel}
+              onSizeChange={setImageSize}
+              onSubmit={submitImage}
+            />
+          ) : null}
+        </div>
       </section>
     </main>
   );
@@ -689,143 +601,178 @@ export function ManyAiApp({
 
 function ChatPanel({
   messages,
-  models,
-  selectedModel,
-  onModelChange,
   prompt,
   onPromptChange,
   isSending,
   onSubmit
 }: {
   messages: ChatMessage[];
-  models: ModelOption[];
-  selectedModel: string;
-  onModelChange: (model: string) => void;
   prompt: string;
   onPromptChange: (value: string) => void;
   isSending: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const selectedModelInfo =
-    models.find((model) => model.id === selectedModel) ?? models[0];
-  const userTurns = messages.filter((message) => message.role === "user").length;
-  const assistantTurns = messages.filter(
-    (message) => message.role === "assistant"
-  ).length;
-  const promptCharacters = prompt.trim().length;
+  const suggestionCards = [
+    "Create a campaign brief for our summer product launch",
+    "Analyze competitors and share key positioning insights",
+    "Draft social media content ideas for Product X",
+    "Show Q2 roadmap milestones in a timeline view"
+  ];
 
   return (
-    <div className="panel-layout chat-layout">
-      <section className="chat-command-bar" aria-label="Chat configuration">
-        <div className="chat-model-summary">
-          <div className="chat-avatar model">
-            <Bot aria-hidden="true" />
-          </div>
-          <div>
-            <span>Active model</span>
-            <strong>{selectedModelInfo?.name ?? selectedModel}</strong>
-            <small>{selectedModelInfo?.id ?? selectedModel}</small>
-          </div>
-        </div>
-        <div className="chat-metrics" aria-label="Conversation details">
-          <span>
-            <Cpu aria-hidden="true" />
-            {formatContextLength(selectedModelInfo?.contextLength)}
-          </span>
-          <span>
-            <FileText aria-hidden="true" />
-            {userTurns} user / {assistantTurns} AI
-          </span>
-          <span>
-            <Clock3 aria-hidden="true" />
-            {isSending ? "Streaming" : "Ready"}
-          </span>
-        </div>
-      </section>
-
-      <section className="conversation-panel chat-thread" aria-label="Chat messages">
+    <div className="chat-layout">
+      <section className="chat-thread" aria-label="Chat messages">
         {messages.length === 0 ? (
-          <div className="empty-state chat-empty">
-            <Sparkles aria-hidden="true" />
-            <h2>Ready for a sharper answer</h2>
-            <p>{selectedModelInfo?.name ?? "The selected model"} is standing by.</p>
+          <div className="luma-demo-content">
+            <div className="user-prompt-bubble">
+              Can you summarize our Q2 marketing strategy and highlight the top
+              3 priorities?
+            </div>
+
+            <div className="assistant-intro">
+              <div className="orb-avatar small" aria-hidden="true" />
+              <p>
+                Here&apos;s a summary of your Q2 marketing strategy with the top
+                3 priorities.
+              </p>
+            </div>
+
+            <article className="strategy-card">
+              <header>
+                <span className="tiny-spark">
+                  <Sparkles aria-hidden="true" />
+                </span>
+                <h2>Q2 Marketing Strategy Overview</h2>
+              </header>
+              <p>
+                Our Q2 strategy focuses on accelerating brand awareness,
+                improving product-led growth, and optimizing the customer
+                journey.
+              </p>
+              <div className="strategy-list">
+                <StrategyItem
+                  number="1"
+                  title="Boost Brand Awareness"
+                  copy="Expand reach through content, partnerships, and thought leadership."
+                />
+                <StrategyItem
+                  number="2"
+                  title="Drive Product-Led Growth"
+                  copy="Enhance onboarding and activation to increase user engagement."
+                />
+                <StrategyItem
+                  number="3"
+                  title="Optimize Customer Journey"
+                  copy="Refine touchpoints across the funnel to improve conversion and retention."
+                />
+              </div>
+              <footer>
+                <span>Sources: Q2 Strategy Doc, Marketing Plan Apr 2024</span>
+                <div>
+                  <button type="button" aria-label="Copy summary">
+                    <Copy aria-hidden="true" />
+                  </button>
+                  <button type="button" aria-label="Like summary">
+                    <ThumbsUp aria-hidden="true" />
+                  </button>
+                </div>
+              </footer>
+            </article>
+
+            <div className="suggestion-grid" aria-label="Suggested prompts">
+              {suggestionCards.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => onPromptChange(suggestion)}
+                >
+                  <span>{suggestion}</span>
+                  <ExternalLink aria-hidden="true" />
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
-          messages.map((message) => (
-            <article
-              key={message.id ?? `${message.role}-${message.created_at}`}
-              className={`message ${message.role}`}
-            >
-              <div className="message-avatar">
-                {message.role === "user" ? (
-                  <UserRound aria-hidden="true" />
-                ) : (
-                  <Bot aria-hidden="true" />
-                )}
-              </div>
-              <div className="message-body">
-                <div className="message-meta">
-                  <div>
-                    <span>
-                      {message.role === "user"
-                        ? "You"
-                        : modelLabel(message.model_id)}
-                    </span>
-                    {message.model_id ? <small>{message.model_id}</small> : null}
-                  </div>
-                  <time>{formatMessageTime(message.created_at)}</time>
+          <div className="live-thread">
+            {messages.map((message) => (
+              <article
+                key={message.id ?? `${message.role}-${message.created_at}`}
+                className={`message ${message.role}`}
+              >
+                <div className="message-avatar">
+                  {message.role === "user" ? (
+                    <UserRound aria-hidden="true" />
+                  ) : (
+                    <div className="orb-avatar small" aria-hidden="true" />
+                  )}
                 </div>
-                <p>{message.content || "..."}</p>
-              </div>
-            </article>
-          ))
+                <div className="message-body">
+                  <div className="message-meta">
+                    <div>
+                      <span>
+                        {message.role === "user"
+                          ? "You"
+                          : modelLabel(message.model_id)}
+                      </span>
+                      {message.model_id ? <small>{message.model_id}</small> : null}
+                    </div>
+                    <time>{formatMessageTime(message.created_at)}</time>
+                  </div>
+                  <p>{message.content || "..."}</p>
+                </div>
+              </article>
+            ))}
+          </div>
         )}
       </section>
 
-      <form className="composer chat-composer" onSubmit={onSubmit}>
-        <div className="composer-toolbar">
-          <div>
-            <label htmlFor="chat-model">Model</label>
-            <select
-              id="chat-model"
-              value={selectedModel}
-              onChange={(event) => onModelChange(event.target.value)}
-            >
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="composer-stat">
-            <span>{promptCharacters}</span>
-            <small>characters</small>
-          </div>
-        </div>
-        <label htmlFor="chat-prompt">Message</label>
-        <div className="prompt-box">
-          <textarea
-            id="chat-prompt"
-            value={prompt}
-            onChange={(event) => onPromptChange(event.target.value)}
-            placeholder="Ask for research, writing, code, planning, or analysis..."
-            rows={4}
-          />
-          <button
-            className="primary-button composer-send"
-            disabled={isSending || !prompt.trim()}
-            type="submit"
-          >
-            {isSending ? (
-              <Loader2 className="spin" aria-hidden="true" />
-            ) : (
-              <Send aria-hidden="true" />
-            )}
-            <span>{isSending ? "Streaming" : "Send"}</span>
-          </button>
-        </div>
+      <form className="luma-composer" onSubmit={onSubmit}>
+        <button type="button" aria-label="Attach file">
+          <Paperclip aria-hidden="true" />
+        </button>
+        <textarea
+          id="chat-prompt"
+          value={prompt}
+          onChange={(event) => onPromptChange(event.target.value)}
+          placeholder="Ask anything..."
+          rows={1}
+        />
+        <button type="button" aria-label="Voice input">
+          <Mic aria-hidden="true" />
+        </button>
+        <button
+          className="send-orb"
+          disabled={isSending || !prompt.trim()}
+          type="submit"
+          aria-label="Send message"
+        >
+          {isSending ? (
+            <Loader2 className="spin" aria-hidden="true" />
+          ) : (
+            <ArrowUp aria-hidden="true" />
+          )}
+        </button>
       </form>
+    </div>
+  );
+}
+
+function StrategyItem({
+  number,
+  title,
+  copy
+}: {
+  number: string;
+  title: string;
+  copy: string;
+}) {
+  return (
+    <div className="strategy-item">
+      <span>{number}</span>
+      <div>
+        <strong>{title}</strong>
+        <p>{copy}</p>
+      </div>
     </div>
   );
 }
@@ -1045,18 +992,6 @@ function modelLabel(modelId?: string | null) {
   }
 
   return modelId.split("/").at(-1) ?? modelId;
-}
-
-function formatContextLength(contextLength?: number) {
-  if (!contextLength) {
-    return "Context varies";
-  }
-
-  if (contextLength >= 1000) {
-    return `${Math.round(contextLength / 1000)}k context`;
-  }
-
-  return `${contextLength} context`;
 }
 
 function formatMessageTime(createdAt?: string) {
