@@ -1727,7 +1727,7 @@ body {
 .panel-logo {
   background:
     linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06)),
-    url("/luma-ai-logo.jpeg") 9% 52% / 245% auto no-repeat;
+    url("/luma-ai-icon.png") center / 88% auto no-repeat;
 }
 
 .brand-logo {
@@ -1965,6 +1965,10 @@ body {
   box-shadow: 0 14px 32px rgba(82, 92, 120, 0.08);
 }
 
+.control-panel.details-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .control-field {
   display: grid;
   gap: 7px;
@@ -2109,6 +2113,17 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.attachment-strip button {
+  min-height: 32px;
+  border: 1px solid rgba(218, 224, 240, 0.95);
+  border-radius: 999px;
+  color: #4f5b70;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 5px 11px;
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .working-compare {
@@ -2311,15 +2326,21 @@ body {
   gap: 12px;
 }
 
-.settings-list > div {
+.settings-list > div,
+.settings-toggle {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   gap: 12px;
-  align-items: start;
+  align-items: center;
   border: 1px solid rgba(226, 231, 242, 0.95);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.8);
   padding: 14px;
+}
+
+.settings-note {
+  grid-template-columns: 42px minmax(0, 1fr) !important;
+  align-items: start !important;
 }
 
 .settings-list svg {
@@ -2329,6 +2350,44 @@ body {
   border-radius: 50%;
   color: #667df4;
   background: #eef3ff;
+}
+
+.settings-toggle input {
+  width: 44px;
+  height: 24px;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: #d6ddeb;
+  padding: 0;
+  position: relative;
+  transition: background 160ms ease;
+}
+
+.settings-toggle input::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(44, 52, 74, 0.2);
+  transition: transform 160ms ease;
+}
+
+.settings-toggle input:checked {
+  background: linear-gradient(135deg, #89b9ff 0%, #6a72ef 100%);
+}
+
+.settings-toggle input:checked::before {
+  transform: translateX(20px);
+}
+
+.settings-toggle input:focus-visible {
+  outline: 3px solid rgba(125, 151, 255, 0.32);
+  outline-offset: 2px;
 }
 
 .settings-list strong,
@@ -2365,6 +2424,15 @@ body {
   color: #fff !important;
   background: linear-gradient(135deg, #ff8db7, #6a72ef) !important;
   animation: listen-pulse 1.1s ease-in-out infinite;
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
 }
 
 @keyframes panel-enter {
@@ -2440,29 +2508,32 @@ body {
   }
 
   .app-sidebar {
-    grid-template-rows: auto auto;
-    gap: 14px;
-    padding: 16px;
+    grid-template-rows: auto;
+    gap: 0;
+    padding: 12px 14px;
     border-right: 0;
     border-bottom: 1px solid rgba(219, 225, 238, 0.9);
   }
 
   .sidebar-search,
   .recent-section,
-  .account-row {
+  .account-row,
+  .mode-nav {
     display: none;
   }
 
-  .mode-nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
+  .sidebar-head {
+    min-height: 44px;
   }
 
-  .mode-nav button,
-  .mode-nav button.primary {
-    justify-content: center;
-    min-height: 44px;
-    padding: 0 8px;
+  .brand-lockup {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .brand-logo {
+    width: 44px;
+    height: 34px;
+    border-radius: 12px;
   }
 
   .app-workspace {
@@ -2472,7 +2543,7 @@ body {
   .app-header {
     grid-template-columns: 1fr auto;
     gap: 12px;
-    padding: 12px 16px;
+    padding: 10px 14px;
   }
 
   .mode-switch {
@@ -2481,7 +2552,8 @@ body {
   }
 
   .functional-body {
-    padding: 14px 16px 18px;
+    min-height: 0;
+    padding: 10px 14px 14px;
   }
 
   .working-compare,
@@ -2496,42 +2568,99 @@ body {
 }
 
 @media (max-width: 720px) {
-  .brand-lockup {
-    grid-template-columns: 50px minmax(0, 1fr);
+  body {
+    background: #f4f7fc;
   }
 
-  .brand-logo {
-    width: 50px;
-    height: 36px;
+  .functional-shell {
+    height: 100dvh;
+    min-height: 100dvh;
   }
 
-  .luma-brand {
-    font-size: 1.28rem;
+  .brand-lockup strong {
+    font-size: 1.02rem;
   }
 
-  .mode-nav button span:not(.nav-icon) {
-    display: none;
+  .brand-lockup small {
+    font-size: 0.72rem;
+  }
+
+  .sidebar-collapse,
+  .top-actions button {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
+  .app-workspace {
+    min-height: 0;
+  }
+
+  .model-title span {
+    font-size: 0.95rem;
+  }
+
+  .model-title small {
+    max-width: 140px;
   }
 
   .control-panel {
     grid-template-columns: 1fr;
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: 0 8px 18px rgba(82, 92, 120, 0.06);
+  }
+
+  .control-field {
+    gap: 5px;
+  }
+
+  .control-field span {
+    font-size: 0.68rem;
+  }
+
+  .control-field select,
+  .image-controls select {
+    height: 40px;
+    border-radius: 12px;
   }
 
   .chat-thread {
-    padding-top: 8px;
+    padding: 4px 0 0;
   }
 
   .real-empty {
     align-content: start;
-    padding-top: 16px;
+    gap: 12px;
+    padding-top: 8px;
+  }
+
+  .empty-orb {
+    width: 46px;
+    height: 46px;
+  }
+
+  .real-empty h1 {
+    font-size: 1.38rem;
   }
 
   .quick-prompts {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .quick-prompts button {
+    min-height: 54px;
+    border-radius: 14px;
+    padding: 11px 13px;
+    font-size: 0.86rem;
   }
 
   .working-composer {
     grid-template-columns: 40px minmax(0, 1fr) 40px 44px;
+    min-height: 58px;
+    border-radius: 18px;
+    padding: 7px;
   }
 
   .working-composer textarea {
@@ -2541,6 +2670,7 @@ body {
   .attachment-strip {
     max-height: 74px;
     overflow: auto;
+    gap: 6px;
   }
 
   .compare-columns {
@@ -2554,24 +2684,46 @@ body {
 
 @media (max-width: 460px) {
   .app-sidebar {
-    padding: 12px;
+    padding: 10px 12px;
   }
 
   .app-header {
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 8px 12px;
   }
 
   .mode-switch button {
     gap: 4px;
-    font-size: 0.78rem;
+    min-height: 36px;
+    font-size: 0.76rem;
   }
 
   .functional-body {
-    padding: 12px;
+    padding: 8px 10px 10px;
   }
 
   .model-readout {
     grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .working-chat {
+    gap: 10px;
+  }
+
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-list > div,
+  .settings-toggle {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .settings-list svg {
+    width: 34px;
+    height: 34px;
   }
 
   .panel-grid {

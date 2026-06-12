@@ -1,0 +1,22 @@
+{
+  "name": "Luma AI",
+  "short_name": "Luma AI",
+  "description": "Chat with and compare many AI models in one workspace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef2fb",
+  "theme_color": "#7d97ff",
+  "icons": [
+    {
+      "src": "/luma-ai-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

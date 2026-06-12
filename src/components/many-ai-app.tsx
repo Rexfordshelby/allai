@@ -80,6 +80,7 @@ type GuestThread = {
 
 const GUEST_THREADS_STORAGE_KEY = "manyai.guestThreads.v1";
 const PROFILE_STORAGE_KEY = "lumaai.profile.v1";
+const APP_SETTINGS_STORAGE_KEY = "lumaai.settings.v1";
 const APP_DISPLAY_NAME = "Luma AI";
 
 type ActivePanel = "menu" | "settings" | "profile" | null;
@@ -89,6 +90,12 @@ type UserProfile = {
   role: string;
   tone: string;
   memory: string;
+};
+
+type AppSettings = {
+  compactUi: boolean;
+  reduceMotion: boolean;
+  showModelDetails: boolean;
 };
 
 type SpeechRecognitionLike = {
@@ -149,6 +156,11 @@ export function ManyAiApp({
     role: "Builder",
     tone: "Clear, professional, and practical",
     memory: "Prefer concise answers with useful next steps."
+  });
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    compactUi: true,
+    reduceMotion: false,
+    showModelDetails: false
   });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -268,8 +280,41 @@ export function ManyAiApp({
       return;
     }
 
+    const stored = window.localStorage.getItem(APP_SETTINGS_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      setAppSettings({
+        compactUi: true,
+        reduceMotion: false,
+        showModelDetails: false,
+        ...(JSON.parse(stored) as Partial<AppSettings>)
+      });
+    } catch {
+      window.localStorage.removeItem(APP_SETTINGS_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
   }, [profile]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      APP_SETTINGS_STORAGE_KEY,
+      JSON.stringify(appSettings)
+    );
+  }, [appSettings]);
 
   useEffect(() => {
     if (cloudEnabled || typeof window === "undefined") {
@@ -587,6 +632,11 @@ export function ManyAiApp({
     document.body.appendChild(link);
     link.click();
     link.remove();
+  }
+
+  function clearAttachments() {
+    setAttachedFiles([]);
+    setStatusMessage("Attachment chips cleared. Embedded prompt text is still editable.");
   }
 
   async function submitChat(event: FormEvent<HTMLFormElement>) {
@@ -916,7 +966,15 @@ export function ManyAiApp({
     models.find((model) => model.id === selectedModel) ?? models[0];
 
   return (
-    <main className="app-shell functional-shell">
+    <main
+      className={[
+        "app-shell functional-shell",
+        appSettings.compactUi ? "compact-ui" : "",
+        appSettings.reduceMotion ? "reduce-motion" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <input
         ref={fileInputRef}
         className="visually-hidden"
@@ -1140,7 +1198,6 @@ export function ManyAiApp({
             >
               <Menu aria-hidden="true" />
             </button>
-            <div className="top-orb" aria-hidden="true" />
           </div>
 
           {statusMessage ? (
@@ -1175,6 +1232,8 @@ export function ManyAiApp({
               onVoice={startVoiceInput}
               isListening={isListening}
               attachedFiles={attachedFiles}
+              showModelDetails={appSettings.showModelDetails}
+              onClearAttachments={clearAttachments}
               isSending={isSending}
               onSubmit={submitChat}
             />
@@ -1216,15 +1275,20 @@ export function ManyAiApp({
       <ActionPanel
         activePanel={activePanel}
         profile={profile}
+        appSettings={appSettings}
         messages={messages}
         guestThreads={guestThreads}
         attachedFiles={attachedFiles}
         onClose={() => setActivePanel(null)}
         onProfileChange={setProfile}
+        onSettingsChange={setAppSettings}
         onExportChat={exportCurrentChat}
         onExportHistory={exportAllHistory}
         onAttach={() => fileInputRef.current?.click()}
         onVoice={startVoiceInput}
+        onClearAttachments={clearAttachments}
+        onOpenSettings={() => setActivePanel("settings")}
+        onOpenProfile={() => setActivePanel("profile")}
         onNewChat={() => {
           startNewConversation("chat");
           setActivePanel(null);
@@ -1252,6 +1316,8 @@ function ChatPanel({
   onVoice,
   isListening,
   attachedFiles,
+  showModelDetails,
+  onClearAttachments,
   isSending,
   onSubmit
 }: {
@@ -1268,6 +1334,8 @@ function ChatPanel({
   onVoice: () => void;
   isListening: boolean;
   attachedFiles: string[];
+  showModelDetails: boolean;
+  onClearAttachments: () => void;
   isSending: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1280,7 +1348,10 @@ function ChatPanel({
 
   return (
     <div className="chat-layout working-chat">
-      <section className="control-panel chat-controls" aria-label="Chat controls">
+      <section
+        className={`control-panel chat-controls ${showModelDetails ? "" : "details-collapsed"}`}
+        aria-label="Chat controls"
+      >
         <label className="control-field" htmlFor="chat-model">
           <span>Chat model</span>
           <select
@@ -1295,19 +1366,21 @@ function ChatPanel({
             ))}
           </select>
         </label>
-        <div className="model-readout">
-          <Bot aria-hidden="true" />
-          <div>
-            <strong>{selectedModelInfo?.name ?? selectedModel}</strong>
-            <small>
-              {modelsLoading
-                ? "Loading OpenRouter models..."
-                : modelsError
-                  ? "Using fallback models"
-                  : `${models.length} OpenRouter models loaded`}
-            </small>
+        {showModelDetails ? (
+          <div className="model-readout">
+            <Bot aria-hidden="true" />
+            <div>
+              <strong>{selectedModelInfo?.name ?? selectedModel}</strong>
+              <small>
+                {modelsLoading
+                  ? "Loading OpenRouter models..."
+                  : modelsError
+                    ? "Using fallback models"
+                    : `${models.length} OpenRouter models loaded`}
+              </small>
+            </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
       <section className="chat-thread" aria-label="Chat messages">
@@ -1371,6 +1444,9 @@ function ChatPanel({
               {file}
             </span>
           ))}
+          <button type="button" onClick={onClearAttachments}>
+            Clear
+          </button>
         </div>
       ) : null}
 
@@ -1633,29 +1709,39 @@ function ImagePanel({
 function ActionPanel({
   activePanel,
   profile,
+  appSettings,
   messages,
   guestThreads,
   attachedFiles,
   onClose,
   onProfileChange,
+  onSettingsChange,
   onExportChat,
   onExportHistory,
   onAttach,
   onVoice,
+  onClearAttachments,
+  onOpenSettings,
+  onOpenProfile,
   onNewChat,
   onClearHistory
 }: {
   activePanel: ActivePanel;
   profile: UserProfile;
+  appSettings: AppSettings;
   messages: ChatMessage[];
   guestThreads: GuestThread[];
   attachedFiles: string[];
   onClose: () => void;
   onProfileChange: (profile: UserProfile) => void;
+  onSettingsChange: (settings: AppSettings) => void;
   onExportChat: () => void;
   onExportHistory: () => void;
   onAttach: () => void;
   onVoice: () => void;
+  onClearAttachments: () => void;
+  onOpenSettings: () => void;
+  onOpenProfile: () => void;
   onNewChat: () => void;
   onClearHistory: () => void;
 }) {
@@ -1697,10 +1783,29 @@ function ActionPanel({
               <span>Attach files</span>
               <small>{attachedFiles.length || "Add"} file context to prompts</small>
             </button>
+            <button
+              type="button"
+              onClick={onClearAttachments}
+              disabled={attachedFiles.length === 0}
+            >
+              <X aria-hidden="true" />
+              <span>Clear attachments</span>
+              <small>Remove visible file chips from the composer</small>
+            </button>
             <button type="button" onClick={onVoice}>
               <Mic aria-hidden="true" />
               <span>Voice input</span>
               <small>Dictate a prompt into the composer</small>
+            </button>
+            <button type="button" onClick={onOpenSettings}>
+              <Settings aria-hidden="true" />
+              <span>Settings</span>
+              <small>Compact UI, animation, and model display options</small>
+            </button>
+            <button type="button" onClick={onOpenProfile}>
+              <UserRound aria-hidden="true" />
+              <span>Profile</span>
+              <small>Personalize name, role, tone, and instructions</small>
             </button>
             <button type="button" onClick={onExportChat}>
               <Download aria-hidden="true" />
@@ -1726,28 +1831,72 @@ function ActionPanel({
 
         {activePanel === "settings" ? (
           <div className="settings-list">
-            <div>
+            <label className="settings-toggle">
               <SlidersHorizontal aria-hidden="true" />
               <div>
-                <strong>Response style</strong>
-                <span>{profile.tone}</span>
+                <strong>Compact mobile layout</strong>
+                <span>Reduces duplicate navigation and keeps the composer visible.</span>
               </div>
-            </div>
-            <div>
+              <input
+                type="checkbox"
+                checked={appSettings.compactUi}
+                onChange={(event) =>
+                  onSettingsChange({
+                    ...appSettings,
+                    compactUi: event.target.checked
+                  })
+                }
+              />
+            </label>
+            <label className="settings-toggle">
+              <Bot aria-hidden="true" />
+              <div>
+                <strong>Show model details</strong>
+                <span>Display the larger model status card above chat.</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={appSettings.showModelDetails}
+                onChange={(event) =>
+                  onSettingsChange({
+                    ...appSettings,
+                    showModelDetails: event.target.checked
+                  })
+                }
+              />
+            </label>
+            <label className="settings-toggle">
+              <Sparkles aria-hidden="true" />
+              <div>
+                <strong>Reduce animation</strong>
+                <span>Turns off motion-heavy panel and card transitions.</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={appSettings.reduceMotion}
+                onChange={(event) =>
+                  onSettingsChange({
+                    ...appSettings,
+                    reduceMotion: event.target.checked
+                  })
+                }
+              />
+            </label>
+            <div className="settings-note">
               <FileText aria-hidden="true" />
               <div>
                 <strong>Exports</strong>
                 <span>Markdown chat export and JSON history export are enabled.</span>
               </div>
             </div>
-            <div>
+            <div className="settings-note">
               <Upload aria-hidden="true" />
               <div>
                 <strong>Attachments</strong>
                 <span>Text, code, CSV, JSON, and Markdown files can be embedded into prompts.</span>
               </div>
             </div>
-            <div>
+            <div className="settings-note">
               <Mic aria-hidden="true" />
               <div>
                 <strong>Voice</strong>

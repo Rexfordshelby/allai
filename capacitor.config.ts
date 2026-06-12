@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Luma AI',
   webDir: 'public',
   server: {
-    url: 'https://allai-pink.vercel.app',
+    url: 'https://luma-ai-studio.vercel.app',
     cleartext: false
   }
 };
