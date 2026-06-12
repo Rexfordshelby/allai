@@ -2596,6 +2596,11 @@ body {
     min-height: 0;
   }
 
+  .workspace-body {
+    overflow: auto;
+    align-content: start;
+  }
+
   .model-title span {
     font-size: 0.95rem;
   }
@@ -2680,6 +2685,98 @@ body {
   .image-gallery {
     grid-template-columns: 1fr;
   }
+
+  .working-images,
+  .working-compare {
+    height: auto;
+    min-height: min-content;
+    overflow: visible;
+    align-content: start;
+    padding-bottom: 18px;
+  }
+
+  .image-layout,
+  .compare-layout {
+    gap: 10px;
+  }
+
+  .image-controls,
+  .model-picker,
+  .compare-composer {
+    overflow: visible;
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  .image-controls {
+    gap: 8px;
+    margin-bottom: 66px;
+  }
+
+  .image-controls label {
+    font-size: 0.82rem;
+  }
+
+  .image-controls textarea {
+    min-height: 74px;
+    max-height: 112px;
+    padding: 10px 12px;
+  }
+
+  #negative-prompt {
+    min-height: 58px;
+  }
+
+  .segmented {
+    border-radius: 14px;
+  }
+
+  .segmented button {
+    min-height: 38px;
+    font-size: 0.82rem;
+  }
+
+  .image-controls .primary-button {
+    position: sticky;
+    bottom: 8px;
+    z-index: 2;
+    min-height: 48px;
+    margin-top: 2px;
+    box-shadow:
+      0 14px 24px rgba(90, 112, 230, 0.32),
+      0 0 0 6px rgba(255, 255, 255, 0.88);
+  }
+
+  .image-gallery {
+    overflow: visible;
+    padding: 0 0 82px;
+  }
+
+  .empty-state {
+    min-height: 210px;
+    padding: 22px 18px;
+  }
+
+  .compare-workspace {
+    display: grid;
+    grid-template-rows: auto auto;
+  }
+
+  .compare-columns {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 8px;
+  }
+
+  .compare-composer {
+    position: sticky;
+    bottom: 8px;
+    z-index: 2;
+    box-shadow:
+      0 14px 24px rgba(82, 92, 120, 0.16),
+      0 0 0 6px rgba(255, 255, 255, 0.88);
+  }
 }
 
 @media (max-width: 460px) {
@@ -2733,5 +2830,73 @@ body {
   .action-panel {
     width: 100%;
     padding: 18px;
+  }
+}
+
+/* Final mobile usability overrides for tool-heavy modes. */
+@media (max-width: 720px) {
+  .workspace-body.functional-body {
+    overflow-y: auto !important;
+    align-content: start !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .working-images,
+  .working-compare {
+    height: auto !important;
+    min-height: min-content !important;
+    overflow: visible !important;
+    align-content: start !important;
+    padding-bottom: 18px !important;
+  }
+
+  .image-controls,
+  .model-picker,
+  .compare-composer {
+    overflow: visible !important;
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  .image-controls {
+    gap: 8px;
+    margin-bottom: 76px !important;
+  }
+
+  .image-controls textarea {
+    min-height: 74px;
+    max-height: 112px;
+    padding: 10px 12px;
+  }
+
+  .image-controls #negative-prompt {
+    min-height: 58px;
+  }
+
+  .image-controls .segmented button {
+    min-height: 38px;
+    font-size: 0.82rem;
+  }
+
+  .image-controls .primary-button {
+    position: static !important;
+    min-height: 48px;
+    box-shadow: 0 14px 24px rgba(90, 112, 230, 0.24);
+  }
+
+  .compare-composer .primary-button {
+    position: sticky;
+    bottom: 8px;
+    z-index: 3;
+    min-height: 48px;
+    box-shadow:
+      0 14px 24px rgba(90, 112, 230, 0.32),
+      0 0 0 6px rgba(255, 255, 255, 0.88);
+  }
+
+  .image-gallery {
+    overflow: visible !important;
+    margin-top: 145px !important;
+    padding-bottom: 82px;
   }
 }
