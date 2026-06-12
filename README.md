@@ -1,0 +1,39 @@
+# ManyAI
+
+ManyAI is a Next.js app for chatting with one AI model, comparing several
+OpenRouter models side by side, and generating images through Hugging Face
+Inference Providers.
+
+## Setup
+
+1. Copy `.env.example` to `.env.local`.
+2. Add Supabase values:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. Add server-only provider secrets:
+   - `OPENROUTER_API_KEY`
+   - `HF_TOKEN`
+   - `DATABASE_URL`
+4. Run `supabase/migrations/0001_manyai_schema.sql` in the Supabase SQL editor
+   or through your migration workflow.
+5. Start the app with `npm run dev`.
+
+Provider secrets must stay server-side. Do not place OpenRouter, Hugging Face,
+database, or service-role secrets in frontend code.
+
+## Commands
+
+```bash
+npm run dev
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+## Notes
+
+- `USE_MOCK_AI=true` makes chat and image routes use local mock responses.
+- Compare mode is capped at 6 models per request.
+- Generated images upload to the private `generated-images` Supabase Storage
+  bucket and are read back through signed URLs.
