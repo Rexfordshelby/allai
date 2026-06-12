@@ -51,8 +51,17 @@ type SseEvent = {
   data: unknown;
 };
 
-export function ManyAiApp({ user }: { user: UserSummary }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+export function ManyAiApp({
+  user,
+  cloudEnabled = false
+}: {
+  user: UserSummary;
+  cloudEnabled?: boolean;
+}) {
+  const supabase = useMemo(
+    () => (cloudEnabled ? createBrowserSupabaseClient() : null),
+    [cloudEnabled]
+  );
   const [mode, setMode] = useState<AppMode>("chat");
   const [models, setModels] = useState<ModelOption[]>(DEFAULT_TEXT_MODELS);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_TEXT_MODELS[0].id);
@@ -92,6 +101,11 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
   }, []);
 
   const refreshConversations = useCallback(async () => {
+    if (!supabase) {
+      setConversations([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("conversations")
       .select("*")
@@ -132,6 +146,10 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
   }, [models]);
 
   async function loadConversation(conversationId: string) {
+    if (!supabase) {
+      return;
+    }
+
     setStatusMessage(null);
 
     const { data: conversation, error: conversationError } = await supabase
@@ -193,6 +211,10 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
   }
 
   async function signOut() {
+    if (!supabase) {
+      return;
+    }
+
     await supabase.auth.signOut();
     window.location.reload();
   }
@@ -277,7 +299,9 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
         );
       }
 
-      await refreshConversations();
+      if (cloudEnabled) {
+        await refreshConversations();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Chat failed.";
       setMessages((current) =>
@@ -347,7 +371,9 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
       }
 
       await readSse(response.body, handleCompareEvent);
-      await refreshConversations();
+      if (cloudEnabled) {
+        await refreshConversations();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Compare failed.";
       setStatusMessage(message);
@@ -457,7 +483,9 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
       }
 
       setImagePrompt("");
-      await refreshConversations();
+      if (cloudEnabled) {
+        await refreshConversations();
+      }
     } catch (error) {
       setStatusMessage(
         error instanceof Error ? error.message : "Image generation failed."
@@ -557,18 +585,20 @@ export function ManyAiApp({ user }: { user: UserSummary }) {
 
         <div className="account-row">
           <div>
-            <small>Signed in</small>
+            <small>{cloudEnabled ? "Signed in" : "No login required"}</small>
             <span>{user.email}</span>
           </div>
-          <button
-            className="icon-button"
-            onClick={() => void signOut()}
-            title="Sign out"
-            aria-label="Sign out"
-            type="button"
-          >
-            <LogOut aria-hidden="true" />
-          </button>
+          {cloudEnabled ? (
+            <button
+              className="icon-button"
+              onClick={() => void signOut()}
+              title="Sign out"
+              aria-label="Sign out"
+              type="button"
+            >
+              <LogOut aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </aside>
 
@@ -679,7 +709,7 @@ function ChatPanel({
           <div className="empty-state">
             <Bot aria-hidden="true" />
             <h2>Start a model conversation</h2>
-            <p>Pick a model, ask once, and the thread saves automatically.</p>
+            <p>Pick a model, ask once, and keep the thread in this workspace.</p>
           </div>
         ) : (
           messages.map((message) => (

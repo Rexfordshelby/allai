@@ -1,7 +1,7 @@
 import { chatRequestSchema } from "@/lib/api/validation";
 import {
   ensureConversation,
-  getAuthedSupabase,
+  getOptionalSupabaseAuth,
   jsonError
 } from "@/lib/api/server";
 import { streamOpenRouterChat } from "@/lib/ai/openrouter";
@@ -10,10 +10,7 @@ import type { ChatMessage } from "@/types/app";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = await getAuthedSupabase();
-  if (auth instanceof Response) {
-    return auth;
-  }
+  const auth = await getOptionalSupabaseAuth();
 
   const parsed = chatRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -22,37 +19,42 @@ export async function POST(request: Request) {
 
   const { supabase, user } = auth;
   const { conversationId, model, prompt, history } = parsed.data;
-  let resolvedConversationId: string;
+  let resolvedConversationId: string | null = null;
 
-  try {
-    resolvedConversationId = await ensureConversation(
-      supabase,
-      user.id,
-      "chat",
-      prompt,
-      conversationId
-    );
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Chat setup failed.", 400);
-  }
+  if (supabase && user) {
+    try {
+      resolvedConversationId = await ensureConversation(
+        supabase,
+        user.id,
+        "chat",
+        prompt,
+        conversationId
+      );
+    } catch (error) {
+      return jsonError(error instanceof Error ? error.message : "Chat setup failed.", 400);
+    }
 
-  await supabase.from("messages").insert({
-    conversation_id: resolvedConversationId,
-    user_id: user.id,
-    role: "user",
-    content: prompt
-  });
-
-  const { data: run } = await supabase
-    .from("model_runs")
-    .insert({
+    await supabase.from("messages").insert({
       conversation_id: resolvedConversationId,
       user_id: user.id,
-      model_id: model,
-      status: "pending"
-    })
-    .select("id")
-    .single();
+      role: "user",
+      content: prompt
+    });
+  }
+
+  const { data: run } =
+    supabase && user && resolvedConversationId
+      ? await supabase
+          .from("model_runs")
+          .insert({
+            conversation_id: resolvedConversationId,
+            user_id: user.id,
+            model_id: model,
+            status: "pending"
+          })
+          .select("id")
+          .single()
+      : { data: null };
 
   const encoder = new TextEncoder();
   const messages: ChatMessage[] = [
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
           }
         });
 
-        if (assistantContent.trim()) {
+        if (supabase && user && resolvedConversationId && assistantContent.trim()) {
           await supabase.from("messages").insert({
             conversation_id: resolvedConversationId,
             user_id: user.id,
@@ -83,7 +85,7 @@ export async function POST(request: Request) {
           });
         }
 
-        if (run?.id) {
+        if (supabase && run?.id) {
           await supabase
             .from("model_runs")
             .update({
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
           error instanceof Error ? error.message : "The model request failed.";
         controller.enqueue(encoder.encode(`\n\n${message}`));
 
-        if (run?.id) {
+        if (supabase && run?.id) {
           await supabase
             .from("model_runs")
             .update({
@@ -121,7 +123,9 @@ export async function POST(request: Request) {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
-      "X-Conversation-Id": resolvedConversationId
+      ...(resolvedConversationId
+        ? { "X-Conversation-Id": resolvedConversationId }
+        : {})
     }
   });
 }

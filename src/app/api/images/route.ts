@@ -3,7 +3,7 @@ import { GENERATED_IMAGES_BUCKET } from "@/lib/constants";
 import { generateImageBytes } from "@/lib/ai/huggingface";
 import {
   ensureConversation,
-  getAuthedSupabase,
+  getOptionalSupabaseAuth,
   jsonError
 } from "@/lib/api/server";
 import { imageRequestSchema } from "@/lib/api/validation";
@@ -11,9 +11,9 @@ import { imageRequestSchema } from "@/lib/api/validation";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const auth = await getAuthedSupabase();
-  if (auth instanceof Response) {
-    return auth;
+  const auth = await getOptionalSupabaseAuth();
+  if (!auth.supabase || !auth.user) {
+    return Response.json({ images: [] });
   }
 
   const { supabase, user } = auth;
@@ -46,10 +46,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await getAuthedSupabase();
-  if (auth instanceof Response) {
-    return auth;
-  }
+  const auth = await getOptionalSupabaseAuth();
 
   const parsed = imageRequestSchema.safeParse(
     await request.json().catch(() => null)
@@ -62,6 +59,42 @@ export async function POST(request: Request) {
   const { supabase, user } = auth;
   const input = parsed.data;
   let conversationId: string | null = input.conversationId ?? null;
+
+  if (!supabase || !user) {
+    try {
+      const image = await generateImageBytes({
+        prompt: input.prompt,
+        negativePrompt: input.negativePrompt,
+        model: input.model,
+        width: input.width,
+        height: input.height,
+        seed: input.seed
+      });
+
+      return Response.json({
+        image: {
+          id: randomUUID(),
+          prompt: input.prompt,
+          negative_prompt: input.negativePrompt ?? null,
+          model_id: input.model,
+          width: input.width,
+          height: input.height,
+          seed: input.seed ?? null,
+          storage_path: null,
+          signed_url: `data:${image.contentType};base64,${image.bytes.toString("base64")}`,
+          status: "completed",
+          error: null,
+          created_at: new Date().toISOString()
+        },
+        conversationId: null
+      });
+    } catch (error) {
+      return jsonError(
+        error instanceof Error ? error.message : "Image generation failed.",
+        502
+      );
+    }
+  }
 
   try {
     conversationId = await ensureConversation(

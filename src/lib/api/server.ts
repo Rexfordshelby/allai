@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { getPublicSupabaseConfig } from "@/lib/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AppMode } from "@/types/app";
 
@@ -18,6 +19,31 @@ export async function getAuthedSupabase(): Promise<
 
   if (error || !user) {
     return jsonError("You must be signed in.", 401);
+  }
+
+  await supabase.from("profiles").upsert({
+    id: user.id,
+    email: user.email ?? null
+  });
+
+  return { supabase, user };
+}
+
+export async function getOptionalSupabaseAuth(): Promise<{
+  supabase: SupabaseClient | null;
+  user: User | null;
+}> {
+  if (!getPublicSupabaseConfig()) {
+    return { supabase: null, user: null };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { supabase, user: null };
   }
 
   await supabase.from("profiles").upsert({

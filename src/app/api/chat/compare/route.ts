@@ -2,7 +2,7 @@ import { streamOpenRouterChat } from "@/lib/ai/openrouter";
 import { encodeSse, streamHeaders } from "@/lib/api/sse";
 import {
   ensureConversation,
-  getAuthedSupabase,
+  getOptionalSupabaseAuth,
   jsonError
 } from "@/lib/api/server";
 import { compareRequestSchema } from "@/lib/api/validation";
@@ -11,10 +11,7 @@ import type { ChatMessage } from "@/types/app";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = await getAuthedSupabase();
-  if (auth instanceof Response) {
-    return auth;
-  }
+  const auth = await getOptionalSupabaseAuth();
 
   const parsed = compareRequestSchema.safeParse(
     await request.json().catch(() => null)
@@ -26,27 +23,29 @@ export async function POST(request: Request) {
 
   const { supabase, user } = auth;
   const { conversationId, models, prompt, history } = parsed.data;
-  let resolvedConversationId: string;
+  let resolvedConversationId: string | null = null;
 
-  try {
-    resolvedConversationId = await ensureConversation(
-      supabase,
-      user.id,
-      "compare",
-      prompt,
-      conversationId
-    );
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Compare setup failed.", 400);
+  if (supabase && user) {
+    try {
+      resolvedConversationId = await ensureConversation(
+        supabase,
+        user.id,
+        "compare",
+        prompt,
+        conversationId
+      );
+    } catch (error) {
+      return jsonError(error instanceof Error ? error.message : "Compare setup failed.", 400);
+    }
+
+    await supabase.from("messages").insert({
+      conversation_id: resolvedConversationId,
+      user_id: user.id,
+      role: "user",
+      content: prompt,
+      metadata: { compare_models: models }
+    });
   }
-
-  await supabase.from("messages").insert({
-    conversation_id: resolvedConversationId,
-    user_id: user.id,
-    role: "user",
-    content: prompt,
-    metadata: { compare_models: models }
-  });
 
   const encoder = new TextEncoder();
   const baseMessages: ChatMessage[] = [
@@ -61,7 +60,7 @@ export async function POST(request: Request) {
       };
 
       send("meta", {
-        conversationId: resolvedConversationId,
+        conversationId: resolvedConversationId ?? null,
         models
       });
 
@@ -69,16 +68,19 @@ export async function POST(request: Request) {
         models.map(async (model) => {
           let content = "";
           const startedAt = Date.now();
-          const { data: run } = await supabase
-            .from("model_runs")
-            .insert({
-              conversation_id: resolvedConversationId,
-              user_id: user.id,
-              model_id: model,
-              status: "pending"
-            })
-            .select("id")
-            .single();
+          const { data: run } =
+            supabase && user && resolvedConversationId
+              ? await supabase
+                  .from("model_runs")
+                  .insert({
+                    conversation_id: resolvedConversationId,
+                    user_id: user.id,
+                    model_id: model,
+                    status: "pending"
+                  })
+                  .select("id")
+                  .single()
+              : { data: null };
 
           send("status", { model, status: "streaming" });
 
@@ -90,15 +92,17 @@ export async function POST(request: Request) {
               }
             });
 
-            await supabase.from("messages").insert({
-              conversation_id: resolvedConversationId,
-              user_id: user.id,
-              role: "assistant",
-              model_id: model,
-              content
-            });
+            if (supabase && user && resolvedConversationId) {
+              await supabase.from("messages").insert({
+                conversation_id: resolvedConversationId,
+                user_id: user.id,
+                role: "assistant",
+                model_id: model,
+                content
+              });
+            }
 
-            if (run?.id) {
+            if (supabase && run?.id) {
               await supabase
                 .from("model_runs")
                 .update({
@@ -114,7 +118,7 @@ export async function POST(request: Request) {
             const message =
               error instanceof Error ? error.message : "The model request failed.";
 
-            if (run?.id) {
+            if (supabase && run?.id) {
               await supabase
                 .from("model_runs")
                 .update({
@@ -138,7 +142,9 @@ export async function POST(request: Request) {
 
   return new Response(stream, {
     headers: streamHeaders({
-      "X-Conversation-Id": resolvedConversationId
+      ...(resolvedConversationId
+        ? { "X-Conversation-Id": resolvedConversationId }
+        : {})
     })
   });
 }
