@@ -9,6 +9,8 @@ const eslintConfig = [
       ".next/**",
       "node_modules/**",
       "coverage/**",
+      "android/**/build/**",
+      "android/**/.gradle/**",
       "playwright-report/**",
       "test-results/**"
     ]
