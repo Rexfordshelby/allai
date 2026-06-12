@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ManyAI</string>
-    <string name="title_activity_main">ManyAI</string>
+    <string name="app_name">Luma AI</string>
+    <string name="title_activity_main">Luma AI</string>
     <string name="package_name">com.rexfordshelby.manyai</string>
     <string name="custom_url_scheme">com.rexfordshelby.manyai</string>
 </resources>

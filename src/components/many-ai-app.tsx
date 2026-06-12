@@ -5,6 +5,8 @@ import {
   ArrowUp,
   Bot,
   Check,
+  Download,
+  FileText,
   Image as ImageIcon,
   Layers3,
   Loader2,
@@ -16,11 +18,21 @@ import {
   RefreshCw,
   Search,
   Settings,
+  SlidersHorizontal,
   Sparkles,
+  Upload,
   UserRound,
   X
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import {
   DEFAULT_COMPARE_MODELS,
   DEFAULT_IMAGE_MODELS,
@@ -67,6 +79,27 @@ type GuestThread = {
 };
 
 const GUEST_THREADS_STORAGE_KEY = "manyai.guestThreads.v1";
+const PROFILE_STORAGE_KEY = "lumaai.profile.v1";
+const APP_DISPLAY_NAME = "Luma AI";
+
+type ActivePanel = "menu" | "settings" | "profile" | null;
+
+type UserProfile = {
+  name: string;
+  role: string;
+  tone: string;
+  memory: string;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+};
 
 export function ManyAiApp({
   cloudEnabled = false
@@ -108,6 +141,16 @@ export function ManyAiApp({
   const [imageSize, setImageSize] = useState(IMAGE_SIZES[0]);
   const [images, setImages] = useState<ImageGeneration[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
+  const [profile, setProfile] = useState<UserProfile>({
+    name: "Alex Morgan",
+    role: "Builder",
+    tone: "Clear, professional, and practical",
+    memory: "Prefer concise answers with useful next steps."
+  });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const refreshModels = useCallback(async () => {
     setModelsLoading(true);
@@ -200,6 +243,33 @@ export function ManyAiApp({
       window.localStorage.removeItem(GUEST_THREADS_STORAGE_KEY);
     }
   }, [cloudEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      setProfile({ ...profile, ...(JSON.parse(stored) as Partial<UserProfile>) });
+    } catch {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    }
+    // Run once on mount; profile defaults are the fallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  }, [profile]);
 
   useEffect(() => {
     if (cloudEnabled || typeof window === "undefined") {
@@ -380,6 +450,145 @@ export function ManyAiApp({
       }));
   }
 
+  function appendToPrompt(text: string) {
+    setPrompt((current) => {
+      const separator = current.trim() ? "\n\n" : "";
+      return `${current}${separator}${text}`;
+    });
+    if (mode === "image") {
+      setImagePrompt((current) => {
+        const separator = current.trim() ? "\n\n" : "";
+        return `${current}${separator}${text}`;
+      });
+    }
+  }
+
+  async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) {
+      return;
+    }
+
+    const summaries: string[] = [];
+
+    for (const file of files.slice(0, 4)) {
+      const isText =
+        file.type.startsWith("text/") ||
+        /\.(md|txt|csv|json|ts|tsx|js|jsx|css|html)$/i.test(file.name);
+      let content = "";
+
+      if (isText && file.size <= 120_000) {
+        content = await file.text();
+      }
+
+      summaries.push(
+        [
+          `Attached file: ${file.name}`,
+          `Type: ${file.type || "unknown"}`,
+          `Size: ${Math.round(file.size / 1024)} KB`,
+          content ? `Content:\n${content.slice(0, 7000)}` : "Content was not embedded; describe how to use this file."
+        ].join("\n")
+      );
+    }
+
+    setAttachedFiles((current) => [
+      ...summaries.map((summary) => summary.split("\n")[0].replace("Attached file: ", "")),
+      ...current
+    ].slice(0, 8));
+    appendToPrompt(summaries.join("\n\n---\n\n"));
+    setStatusMessage(`${files.length} file${files.length === 1 ? "" : "s"} attached to the prompt.`);
+    event.target.value = "";
+  }
+
+  function startVoiceInput() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as typeof window & {
+        SpeechRecognition?: new () => SpeechRecognitionLike;
+        webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+      }).SpeechRecognition ??
+      (window as typeof window & {
+        webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+      }).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setStatusMessage("Voice input is not supported in this browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript;
+      if (transcript) {
+        appendToPrompt(transcript);
+      }
+    };
+    recognition.onerror = () => {
+      setStatusMessage("Voice input could not hear anything. Try again.");
+      setIsListening(false);
+    };
+    recognition.onend = () => setIsListening(false);
+    setIsListening(true);
+    recognition.start();
+  }
+
+  function exportCurrentChat() {
+    const markdown = [
+      `# ${APP_DISPLAY_NAME} Chat Export`,
+      "",
+      `Profile: ${profile.name} (${profile.role})`,
+      `Mode: ${modeLabel(mode)}`,
+      `Exported: ${new Date().toLocaleString()}`,
+      "",
+      ...messages.map((message) =>
+        [
+          `## ${message.role === "user" ? "You" : modelLabel(message.model_id)}`,
+          "",
+          message.content || "..."
+        ].join("\n")
+      )
+    ].join("\n");
+
+    downloadTextFile("luma-ai-chat.md", markdown);
+  }
+
+  function exportAllHistory() {
+    downloadTextFile(
+      "luma-ai-history.json",
+      JSON.stringify(
+        {
+          app: APP_DISPLAY_NAME,
+          exportedAt: new Date().toISOString(),
+          profile,
+          guestThreads,
+          current: { mode, messages, compareResults, images }
+        },
+        null,
+        2
+      )
+    );
+  }
+
+  function downloadImage(image: ImageGeneration) {
+    if (!image.signed_url) {
+      setStatusMessage("This image has no downloadable URL yet.");
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = image.signed_url;
+    link.download = `luma-ai-${image.id}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   async function submitChat(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = prompt.trim();
@@ -429,7 +638,7 @@ export function ManyAiApp({
           conversationId: cloudEnabled ? selectedConversationId : null,
           model: selectedModel,
           prompt: trimmed,
-          history
+          history: [{ role: "system", content: profileContext(profile) }, ...history]
         })
       });
 
@@ -540,7 +749,7 @@ export function ManyAiApp({
           conversationId: cloudEnabled ? selectedConversationId : null,
           models: compareModels,
           prompt: trimmed,
-          history
+          history: [{ role: "system", content: profileContext(profile) }, ...history]
         })
       });
 
@@ -708,9 +917,29 @@ export function ManyAiApp({
 
   return (
     <main className="app-shell functional-shell">
+      <input
+        ref={fileInputRef}
+        className="visually-hidden"
+        type="file"
+        multiple
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(event) => void handleFileUpload(event)}
+      />
       <aside className="sidebar app-sidebar" aria-label="Workspace">
         <div className="sidebar-head">
-          <strong className="luma-brand">ManyAI</strong>
+          <button
+            className="brand-lockup"
+            type="button"
+            onClick={() => setActivePanel("profile")}
+            aria-label="Open profile"
+          >
+            <span className="brand-logo" aria-hidden="true" />
+            <span>
+              <strong>{APP_DISPLAY_NAME}</strong>
+              <small>{profile.role}</small>
+            </span>
+          </button>
           <button
             className="sidebar-collapse"
             onClick={() => startNewConversation(mode)}
@@ -726,6 +955,7 @@ export function ManyAiApp({
           <button
             className={mode === "chat" ? "active primary" : "primary"}
             onClick={() => startNewConversation("chat")}
+            aria-label="Chat"
             type="button"
           >
             <span className="nav-icon">
@@ -736,6 +966,7 @@ export function ManyAiApp({
           <button
             className={mode === "compare" ? "active" : ""}
             onClick={() => startNewConversation("compare")}
+            aria-label="Compare"
             type="button"
           >
             <Layers3 aria-hidden="true" />
@@ -744,16 +975,28 @@ export function ManyAiApp({
           <button
             className={mode === "image" ? "active" : ""}
             onClick={() => startNewConversation("image")}
+            aria-label="Images"
             type="button"
           >
             <ImageIcon aria-hidden="true" />
             <span>Images</span>
           </button>
-          <button type="button" aria-label="Voice tools" title="Voice tools">
+          <button
+            type="button"
+            aria-label="Voice tools"
+            title="Voice tools"
+            onClick={startVoiceInput}
+            className={isListening ? "listening" : ""}
+          >
             <Mic aria-hidden="true" />
             <span>Voice</span>
           </button>
-          <button type="button" aria-label="Settings" title="Settings">
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setActivePanel("settings")}
+          >
             <Settings aria-hidden="true" />
             <span>Settings</span>
           </button>
@@ -829,7 +1072,7 @@ export function ManyAiApp({
         <div className="account-row">
           <div className="orb-avatar" aria-hidden="true" />
           <div className="account-copy">
-            <strong>{cloudEnabled ? "Cloud workspace" : "Guest workspace"}</strong>
+            <strong>{profile.name}</strong>
             <small>{models.length} text models available</small>
           </div>
           <span className="account-dot" aria-hidden="true" />
@@ -889,7 +1132,12 @@ export function ManyAiApp({
                 <RefreshCw aria-hidden="true" />
               )}
             </button>
-            <button title="Menu" aria-label="Menu" type="button">
+            <button
+              title="Menu"
+              aria-label="Menu"
+              type="button"
+              onClick={() => setActivePanel("menu")}
+            >
               <Menu aria-hidden="true" />
             </button>
             <div className="top-orb" aria-hidden="true" />
@@ -923,6 +1171,10 @@ export function ManyAiApp({
               onModelChange={setSelectedModel}
               prompt={prompt}
               onPromptChange={setPrompt}
+              onAttach={() => fileInputRef.current?.click()}
+              onVoice={startVoiceInput}
+              isListening={isListening}
+              attachedFiles={attachedFiles}
               isSending={isSending}
               onSubmit={submitChat}
             />
@@ -954,11 +1206,34 @@ export function ManyAiApp({
               onNegativePromptChange={setNegativePrompt}
               onModelChange={setImageModel}
               onSizeChange={setImageSize}
+              onDownloadImage={downloadImage}
               onSubmit={submitImage}
             />
           ) : null}
         </div>
       </section>
+
+      <ActionPanel
+        activePanel={activePanel}
+        profile={profile}
+        messages={messages}
+        guestThreads={guestThreads}
+        attachedFiles={attachedFiles}
+        onClose={() => setActivePanel(null)}
+        onProfileChange={setProfile}
+        onExportChat={exportCurrentChat}
+        onExportHistory={exportAllHistory}
+        onAttach={() => fileInputRef.current?.click()}
+        onVoice={startVoiceInput}
+        onNewChat={() => {
+          startNewConversation("chat");
+          setActivePanel(null);
+        }}
+        onClearHistory={() => {
+          setGuestThreads([]);
+          setActivePanel(null);
+        }}
+      />
     </main>
   );
 }
@@ -973,6 +1248,10 @@ function ChatPanel({
   onModelChange,
   prompt,
   onPromptChange,
+  onAttach,
+  onVoice,
+  isListening,
+  attachedFiles,
   isSending,
   onSubmit
 }: {
@@ -985,6 +1264,10 @@ function ChatPanel({
   onModelChange: (model: string) => void;
   prompt: string;
   onPromptChange: (value: string) => void;
+  onAttach: () => void;
+  onVoice: () => void;
+  isListening: boolean;
+  attachedFiles: string[];
   isSending: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1080,8 +1363,19 @@ function ChatPanel({
         )}
       </section>
 
+      {attachedFiles.length ? (
+        <div className="attachment-strip" aria-label="Attached files">
+          {attachedFiles.map((file) => (
+            <span key={file}>
+              <FileText aria-hidden="true" />
+              {file}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <form className="luma-composer working-composer" onSubmit={onSubmit}>
-        <button type="button" aria-label="Attach file">
+        <button type="button" aria-label="Attach file" onClick={onAttach}>
           <Paperclip aria-hidden="true" />
         </button>
         <textarea
@@ -1091,8 +1385,17 @@ function ChatPanel({
           placeholder="Ask anything..."
           rows={1}
         />
-        <button type="button" aria-label="Voice input">
-          <Mic aria-hidden="true" />
+        <button
+          type="button"
+          aria-label="Voice input"
+          onClick={onVoice}
+          className={isListening ? "listening" : ""}
+        >
+          {isListening ? (
+            <Loader2 className="spin" aria-hidden="true" />
+          ) : (
+            <Mic aria-hidden="true" />
+          )}
         </button>
         <button
           className="send-orb"
@@ -1211,6 +1514,7 @@ function ImagePanel({
   onNegativePromptChange,
   onModelChange,
   onSizeChange,
+  onDownloadImage,
   onSubmit
 }: {
   images: ImageGeneration[];
@@ -1223,6 +1527,7 @@ function ImagePanel({
   onNegativePromptChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onSizeChange: (size: (typeof IMAGE_SIZES)[number]) => void;
+  onDownloadImage: (image: ImageGeneration) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -1307,6 +1612,15 @@ function ImagePanel({
               <div>
                 <strong>{image.model_id}</strong>
                 <p>{image.prompt}</p>
+                <button
+                  className="download-image-button"
+                  type="button"
+                  onClick={() => onDownloadImage(image)}
+                  disabled={!image.signed_url}
+                >
+                  <Download aria-hidden="true" />
+                  <span>Download</span>
+                </button>
               </div>
             </article>
           ))
@@ -1314,6 +1628,226 @@ function ImagePanel({
       </section>
     </div>
   );
+}
+
+function ActionPanel({
+  activePanel,
+  profile,
+  messages,
+  guestThreads,
+  attachedFiles,
+  onClose,
+  onProfileChange,
+  onExportChat,
+  onExportHistory,
+  onAttach,
+  onVoice,
+  onNewChat,
+  onClearHistory
+}: {
+  activePanel: ActivePanel;
+  profile: UserProfile;
+  messages: ChatMessage[];
+  guestThreads: GuestThread[];
+  attachedFiles: string[];
+  onClose: () => void;
+  onProfileChange: (profile: UserProfile) => void;
+  onExportChat: () => void;
+  onExportHistory: () => void;
+  onAttach: () => void;
+  onVoice: () => void;
+  onNewChat: () => void;
+  onClearHistory: () => void;
+}) {
+  if (!activePanel) {
+    return null;
+  }
+
+  return (
+    <div className="panel-scrim" role="presentation" onMouseDown={onClose}>
+      <aside
+        className="action-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${activePanel} panel`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="panel-logo" aria-hidden="true" />
+            <div>
+              <strong>{panelTitle(activePanel)}</strong>
+              <small>{APP_DISPLAY_NAME}</small>
+            </div>
+          </div>
+          <button type="button" aria-label="Close panel" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+
+        {activePanel === "menu" ? (
+          <div className="panel-grid">
+            <button type="button" onClick={onNewChat}>
+              <Plus aria-hidden="true" />
+              <span>New chat</span>
+              <small>Start fresh without losing history</small>
+            </button>
+            <button type="button" onClick={onAttach}>
+              <Upload aria-hidden="true" />
+              <span>Attach files</span>
+              <small>{attachedFiles.length || "Add"} file context to prompts</small>
+            </button>
+            <button type="button" onClick={onVoice}>
+              <Mic aria-hidden="true" />
+              <span>Voice input</span>
+              <small>Dictate a prompt into the composer</small>
+            </button>
+            <button type="button" onClick={onExportChat}>
+              <Download aria-hidden="true" />
+              <span>Export chat</span>
+              <small>{messages.length} messages as Markdown</small>
+            </button>
+            <button type="button" onClick={onExportHistory}>
+              <FileText aria-hidden="true" />
+              <span>Export history</span>
+              <small>{guestThreads.length} saved guest sessions</small>
+            </button>
+            <button type="button" onClick={onClearHistory}>
+              <X aria-hidden="true" />
+              <span>Clear local history</span>
+              <small>Remove guest sessions from this browser</small>
+            </button>
+          </div>
+        ) : null}
+
+        {activePanel === "profile" ? (
+          <ProfileForm profile={profile} onProfileChange={onProfileChange} />
+        ) : null}
+
+        {activePanel === "settings" ? (
+          <div className="settings-list">
+            <div>
+              <SlidersHorizontal aria-hidden="true" />
+              <div>
+                <strong>Response style</strong>
+                <span>{profile.tone}</span>
+              </div>
+            </div>
+            <div>
+              <FileText aria-hidden="true" />
+              <div>
+                <strong>Exports</strong>
+                <span>Markdown chat export and JSON history export are enabled.</span>
+              </div>
+            </div>
+            <div>
+              <Upload aria-hidden="true" />
+              <div>
+                <strong>Attachments</strong>
+                <span>Text, code, CSV, JSON, and Markdown files can be embedded into prompts.</span>
+              </div>
+            </div>
+            <div>
+              <Mic aria-hidden="true" />
+              <div>
+                <strong>Voice</strong>
+                <span>Uses your browser speech recognition when available.</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </aside>
+    </div>
+  );
+}
+
+function ProfileForm({
+  profile,
+  onProfileChange
+}: {
+  profile: UserProfile;
+  onProfileChange: (profile: UserProfile) => void;
+}) {
+  return (
+    <form className="profile-form">
+      <label>
+        <span>Name</span>
+        <input
+          value={profile.name}
+          onChange={(event) =>
+            onProfileChange({ ...profile, name: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        <span>Role</span>
+        <input
+          value={profile.role}
+          onChange={(event) =>
+            onProfileChange({ ...profile, role: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        <span>Preferred tone</span>
+        <input
+          value={profile.tone}
+          onChange={(event) =>
+            onProfileChange({ ...profile, tone: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        <span>Personal instructions</span>
+        <textarea
+          value={profile.memory}
+          onChange={(event) =>
+            onProfileChange({ ...profile, memory: event.target.value })
+          }
+          rows={5}
+        />
+      </label>
+    </form>
+  );
+}
+
+function panelTitle(activePanel: Exclude<ActivePanel, null>) {
+  if (activePanel === "profile") {
+    return "Profile";
+  }
+
+  if (activePanel === "settings") {
+    return "Settings";
+  }
+
+  return "Menu";
+}
+
+function profileContext(profile: UserProfile) {
+  return [
+    `You are ${APP_DISPLAY_NAME}, a polished multi-model AI assistant.`,
+    `User name: ${profile.name || "User"}.`,
+    `User role/context: ${profile.role || "Not specified"}.`,
+    `Preferred response style: ${profile.tone || "Clear and useful"}.`,
+    `Personal instructions: ${profile.memory || "No extra instructions."}`,
+    "Be practical, accurate, and format responses so they are easy to scan."
+  ].join("\n");
+}
+
+function downloadTextFile(filename: string, content: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function StatusIcon({ status }: { status: CompareStatus }) {

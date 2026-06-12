@@ -1,6 +1,6 @@
 import type { ModelOption } from "@/types/app";
 
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "ManyAI";
+export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Luma AI";
 
 export const MAX_COMPARE_MODELS = 6;
 export const MAX_CHAT_PROMPT_CHARS = 8_000;

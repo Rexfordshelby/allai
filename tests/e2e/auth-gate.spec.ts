@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("opens directly into the app workspace", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByText("ManyAI", { exact: true })).toBeVisible();
+  await expect(page.getByText("Luma AI", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Chat" }).first()).toBeVisible();
   await expect(page.getByLabel("Chat model")).toBeVisible();
   await expect(page.getByRole("button", { name: "Compare" }).first()).toBeVisible();
