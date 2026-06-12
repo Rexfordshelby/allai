@@ -7,6 +7,11 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type AuthMode = "sign-in" | "sign-up";
 
+function getAuthCallbackUrl() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  return `${appUrl || window.location.origin}/auth/callback`;
+}
+
 export function AuthScreen() {
   const [authMode, setAuthMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
@@ -22,7 +27,7 @@ export function AuthScreen() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: getAuthCallbackUrl(),
         shouldCreateUser: authMode === "sign-up"
       }
     });

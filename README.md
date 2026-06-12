@@ -14,9 +14,15 @@ Inference Providers.
    - `OPENROUTER_API_KEY`
    - `HF_TOKEN`
    - `DATABASE_URL`
-4. Run `supabase/migrations/0001_manyai_schema.sql` in the Supabase SQL editor
+4. Set `NEXT_PUBLIC_APP_URL` to the real deployed web URL, for example
+   `https://allai.vercel.app`. Supabase magic links use this URL for auth
+   callbacks.
+5. Run `supabase/migrations/0001_manyai_schema.sql` in the Supabase SQL editor
    or through your migration workflow.
-5. Start the app with `npm run dev`.
+6. Start the app with `npm run dev`.
+
+In Supabase Auth settings, add the deployed callback URL to allowed redirect
+URLs, for example `https://allai.vercel.app/auth/callback`.
 
 Provider secrets must stay server-side. Do not place OpenRouter, Hugging Face,
 database, or service-role secrets in frontend code.
