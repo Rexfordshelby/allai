@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { GENERATED_IMAGES_BUCKET } from "@/lib/constants";
-import { generateImageBytes } from "@/lib/ai/huggingface";
+import { generateImageBytes } from "@/lib/ai/pollinations";
 import {
   ensureConversation,
   getOptionalSupabaseAuth,

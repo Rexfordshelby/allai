@@ -13,7 +13,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@huggingface/inference": "latest",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "clsx": "latest",

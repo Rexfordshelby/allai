@@ -32,6 +32,6 @@ describe("request validation", () => {
 
     expect(parsed.width).toBe(1024);
     expect(parsed.height).toBe(1024);
-    expect(parsed.model).toContain("FLUX");
+    expect(parsed.model).toBe("flux");
   });
 });

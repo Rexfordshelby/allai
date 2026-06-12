@@ -34,10 +34,10 @@ export const DEFAULT_COMPARE_MODELS = DEFAULT_TEXT_MODELS.slice(0, 3).map(
 );
 
 export const DEFAULT_IMAGE_MODELS = [
-  "black-forest-labs/FLUX.1-dev",
-  "black-forest-labs/FLUX.1-Krea-dev",
-  "Qwen/Qwen-Image",
-  "ByteDance/Hyper-SD"
+  "flux",
+  "gptimage",
+  "kontext",
+  "zimage"
 ];
 
 export const IMAGE_SIZES = [

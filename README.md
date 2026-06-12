@@ -1,8 +1,7 @@
 # ManyAI
 
 ManyAI is a Next.js app for chatting with one AI model, comparing several
-OpenRouter models side by side, and generating images through Hugging Face
-Inference Providers.
+OpenRouter models side by side, and generating images through Pollinations AI.
 
 ## Setup
 
@@ -12,7 +11,7 @@ Inference Providers.
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 3. Add server-only provider secrets:
    - `OPENROUTER_API_KEY`
-   - `HF_TOKEN`
+   - `POLLINATIONS_API_KEY`
    - `DATABASE_URL`
 4. Set `NEXT_PUBLIC_APP_URL` to the real deployed web URL, for example
    `https://allai-pink.vercel.app`. Supabase magic links use this URL for auth
@@ -24,7 +23,7 @@ Inference Providers.
 In Supabase Auth settings, add the deployed callback URL to allowed redirect
 URLs, for example `https://allai-pink.vercel.app/auth/callback`.
 
-Provider secrets must stay server-side. Do not place OpenRouter, Hugging Face,
+Provider secrets must stay server-side. Do not place OpenRouter, Pollinations,
 database, or service-role secrets in frontend code.
 
 ## Commands
