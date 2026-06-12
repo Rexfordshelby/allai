@@ -34,6 +34,11 @@ let modelCache:
 
 export function openRouterHeaders() {
   const apiKey = process.env.OPENROUTER_API_KEY;
+  const configuredAppName = process.env.NEXT_PUBLIC_APP_NAME?.trim();
+  const appName =
+    configuredAppName && configuredAppName !== "ManyAI"
+      ? configuredAppName
+      : "Luma AI";
 
   if (!apiKey) {
     return null;
@@ -43,7 +48,7 @@ export function openRouterHeaders() {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-    "X-OpenRouter-Title": process.env.NEXT_PUBLIC_APP_NAME ?? "Luma AI"
+    "X-OpenRouter-Title": appName
   };
 }
 
